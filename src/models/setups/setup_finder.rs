@@ -1,6 +1,7 @@
 use crate::{
     data_sources::datasource::DataSource,
     models::{
+        database::db::DB,
         message_payloads::{
             candle_added_payload::CandleAddedPayload, ping_payload::PingPayload,
             request_latest_candles_payload::RequestLatestCandlesPayload,
@@ -21,6 +22,7 @@ use tokio::try_join;
 pub struct SetupFinder {
     strategy: Box<dyn TradingStrategy>,
     ts_addr: Addr<TimeSeries>,
+    db_addr: Addr<DB>,
     source: DataSource,
     notifications_enabled: bool,
     live_trading_enabled: bool,
@@ -52,6 +54,7 @@ impl Handler<CandleAddedPayload> for SetupFinder {
         let live_trading_enabled = self.live_trading_enabled;
         let mut spawned_trades = self.spawned_trade_addrs.clone();
         let source = self.source.clone();
+        let db_addr = self.db_addr.clone();
 
         // Clear trades before potentially starting new one
         self.clear_closed_trades();
@@ -114,6 +117,8 @@ impl Handler<CandleAddedPayload> for SetupFinder {
                     .resolution_strategy(resolution_strategy)
                     .orientation(strategy.orientation())
                     .timeseries_addr(ts.clone())
+                    .trading_strategy(strategy.clone_box())
+                    .db_addr(db_addr)
                     .build()
                     .expect("Unable to build Trade in SetupFinder");
 
@@ -158,6 +163,7 @@ impl SetupFinder {
     pub fn new(
         strategy: Box<dyn TradingStrategy>,
         ts_addr: Addr<TimeSeries>,
+        db_addr: Addr<DB>,
         notifications_enabled: bool,
         live_trading_enabled: bool,
         only_trigger_once: bool,
@@ -167,6 +173,7 @@ impl SetupFinder {
         Ok(SetupFinder {
             strategy,
             ts_addr,
+            db_addr,
             notifications_enabled,
             live_trading_enabled,
             only_trigger_once,

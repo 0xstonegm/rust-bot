@@ -20,6 +20,7 @@ use dotenv::dotenv;
 use indicators::{indicator_type::IndicatorType, populates_candles::PopulatesCandlesWithSelf};
 use models::{
     candle::Candle,
+    database::db::DB,
     interval::Interval,
     message_payloads::{
         ts_subscribe_payload::TSSubscribePayload, websocket_payload::WebsocketPayload,
@@ -60,10 +61,15 @@ pub async fn run_actual_strategy() -> Result<()> {
 
     let ts_addr = ts.start();
 
+    // Set up DB
+    let db = DB::new().await?;
+    let db_addr = db.start();
+
     // Create setup finder
     let setup_finder = SetupFinderBuilder::new()
         .strategy(strategy)
         .ts(ts_addr.clone())
+        .db_addr(db_addr.clone())
         .notifications_enabled(true)
         .live_trading_enabled(true)
         .source(source.clone())
@@ -91,7 +97,7 @@ pub async fn run_always_true_buys() -> Result<()> {
     let strategy: Box<dyn TradingStrategy> = Box::new(AlwaysTrueStrategy::new());
     let interval = Interval::Minute1;
     // let source = DataSource::Bybit;
-    let source = DataSource::Dummy(6000);
+    let source = DataSource::Dummy(4000);
     let net = NetVersion::Mainnet;
 
     // Initialize timeseries and indicators
@@ -106,14 +112,19 @@ pub async fn run_always_true_buys() -> Result<()> {
 
     let ts_addr = ts.start();
 
+    // Set up DB
+    let db = DB::new().await?;
+    let db_addr = db.start();
+
     // Create setup finder and subscribe to timeseries
     let setup_finder = SetupFinderBuilder::new()
         .strategy(strategy)
         .ts(ts_addr.clone())
-        .notifications_enabled(true)
+        .notifications_enabled(false)
         .live_trading_enabled(true)
         .source(source.clone())
         .only_trigger_once(true)
+        .db_addr(db_addr)
         .build()?;
 
     let sf_addr = setup_finder.start();

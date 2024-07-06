@@ -1,16 +1,18 @@
 use crate::{
     data_sources::datasource::DataSource,
     models::{
-        setups::setup::Setup, strategy_orientation::StrategyOrientation, timeseries::TimeSeries,
-        trade::Trade,
+        database::db::DB, setups::setup::Setup, strategy_orientation::StrategyOrientation,
+        timeseries::TimeSeries, trade::Trade, traits::trading_strategy::TradingStrategy,
     },
     resolution_strategies::resolution_strategy::ResolutionStrategy,
 };
 use actix::Addr;
 use anyhow::{anyhow, Result};
+use uuid::Uuid;
 
 #[derive(Debug)]
 pub struct TradeBuilder {
+    pub id: Uuid,
     pub setup: Option<Setup>,
     pub quantity: Option<f64>,
     pub dollar_value: Option<f64>,
@@ -20,11 +22,14 @@ pub struct TradeBuilder {
     pub resolution_strategy: Option<ResolutionStrategy>,
     pub orientation: Option<StrategyOrientation>,
     pub timeseries_addr: Option<Addr<TimeSeries>>,
+    pub trading_strategy: Option<Box<dyn TradingStrategy>>,
+    pub db_addr: Option<Addr<DB>>,
 }
 
 impl TradeBuilder {
     pub fn new() -> Self {
         TradeBuilder {
+            id: Uuid::new_v4(),
             setup: None,
             quantity: None,
             dollar_value: None,
@@ -34,6 +39,8 @@ impl TradeBuilder {
             resolution_strategy: None,
             orientation: None,
             timeseries_addr: None,
+            trading_strategy: None,
+            db_addr: None,
         }
     }
 
@@ -82,6 +89,22 @@ impl TradeBuilder {
         self
     }
 
+    pub fn db_addr(mut self, db_addr: Addr<DB>) -> Self {
+        self.db_addr = Some(db_addr);
+        self
+    }
+
+    #[allow(dead_code)]
+    pub fn id(mut self, id: Uuid) -> Self {
+        self.id = id;
+        self
+    }
+
+    pub fn trading_strategy(mut self, trading_strategy: Box<dyn TradingStrategy>) -> Self {
+        self.trading_strategy = Some(trading_strategy);
+        self
+    }
+
     pub fn build(&self) -> Result<Trade> {
         let notifications_enabled = self.notifications_enabled;
         let trading_enabled = self.trading_enabled;
@@ -110,7 +133,19 @@ impl TradeBuilder {
             .clone()
             .ok_or(anyhow!("TimeSeries is required to build Trade."))?;
 
+        let db_addr = self
+            .db_addr
+            .clone()
+            .ok_or(anyhow!("DB Address is required to build Trade."))?;
+
+        let trading_strategy = self
+            .trading_strategy
+            .as_ref()
+            .ok_or(anyhow!("Trading Strategy is required to build Trade."))?
+            .clone_box();
+
         let trade = Trade {
+            id: self.id,
             setup,
             quantity,
             dollar_value,
@@ -119,6 +154,8 @@ impl TradeBuilder {
             trading_enabled,
             resolution_strategy,
             timeseries,
+            trading_strategy,
+            db_addr,
         };
 
         Ok(trade)

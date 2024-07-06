@@ -1,5 +1,6 @@
 pub mod calculation_mode;
 pub mod candle;
+pub mod database;
 pub mod interval;
 pub mod ma_type;
 pub mod message_payloads;

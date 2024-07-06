@@ -18,6 +18,8 @@ pub fn str_date_to_datetime(s: &str) -> Result<DateTime<Utc>> {
     match date {
         Ok(date) => {
             let datetime = NaiveDateTime::new(date, time);
+
+            #[allow(deprecated)]
             Ok(DateTime::from_utc(datetime, Utc))
         }
         Err(e) => Err(anyhow!(e)),

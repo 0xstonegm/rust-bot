@@ -1,7 +1,7 @@
 use crate::{
     data_sources::datasource::DataSource,
     models::{
-        setups::setup_finder::SetupFinder, timeseries::TimeSeries, trade::Trade,
+        database::db::DB, setups::setup_finder::SetupFinder, timeseries::TimeSeries, trade::Trade,
         traits::trading_strategy::TradingStrategy,
     },
 };
@@ -12,6 +12,7 @@ pub struct SetupFinderBuilder {
     strategy: Option<Box<dyn TradingStrategy>>,
     ts: Option<Addr<TimeSeries>>,
     source: Option<DataSource>,
+    db_addr: Option<Addr<DB>>,
     notifications_enabled: bool,
     live_trading_enabled: bool,
     only_trigger_once: bool,
@@ -24,6 +25,7 @@ impl SetupFinderBuilder {
             strategy: None,
             ts: None,
             source: None,
+            db_addr: None,
             notifications_enabled: false,
             live_trading_enabled: false,
             only_trigger_once: false,
@@ -43,6 +45,11 @@ impl SetupFinderBuilder {
 
     pub fn ts(mut self, ts: Addr<TimeSeries>) -> Self {
         self.ts = Some(ts);
+        self
+    }
+
+    pub fn db_addr(mut self, ts: Addr<DB>) -> Self {
+        self.db_addr = Some(ts);
         self
     }
 
@@ -81,10 +88,14 @@ impl SetupFinderBuilder {
         let source = self
             .source
             .context("Source is required to build SetupFinder")?;
+        let db_addr = self
+            .db_addr
+            .context("DB is required to build SetupFinder")?;
 
         Ok(SetupFinder::new(
             strategy,
             ts,
+            db_addr,
             notifications_enabled,
             live_trading_enabled,
             only_trigger_once,
