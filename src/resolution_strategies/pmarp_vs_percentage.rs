@@ -73,6 +73,7 @@ impl IsResolutionStrategy for PmarpVsPercentageResolution {
 
         let ind_type =
             IndicatorType::PMARP(self.pmarp_len, self.pmarp_lookback, self.pmarp_ma_type);
+
         let pmarp = candles[len - 1]
             .indicators
             .get(&ind_type)

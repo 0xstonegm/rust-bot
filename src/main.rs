@@ -8,6 +8,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     rust_bot::run_actual_strategy().await?;
     // rust_bot::run_always_true_buys().await?;
+    // rust_bot::run_manual_candles().await?;
 
     // rust_bot::run_setup_finder().await?;
     // rust_bot::run_manual_setups().await?;

@@ -30,8 +30,8 @@ pub enum IndicatorType {
     BBW(usize),
     BBWP(usize, usize), // length, lookback
     DynamicPivot(usize),
-    PMAR(usize, MAType),
-    PMARP(usize, usize, MAType),     // length, lookback
+    PMAR(usize, MAType),             // length, moving average type
+    PMARP(usize, usize, MAType),     // length, lookback, moving average type
     Stochastic(usize, usize, usize), // K-lenght, K-smoothing, D-smoothing
 }
 

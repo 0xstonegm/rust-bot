@@ -3,6 +3,7 @@ mod indicators;
 mod models;
 mod notifications;
 mod resolution_strategies;
+mod run_configs;
 mod strategy_testing;
 mod trading_strategies;
 mod utils;
@@ -14,7 +15,7 @@ use crate::{
     trading_strategies::private::jb_2::JB2,
 };
 use actix::Actor;
-use anyhow::Result;
+use anyhow::{Ok, Result};
 use data_sources::{datasource::DataSource, local};
 use dotenv::dotenv;
 use indicators::{indicator_type::IndicatorType, populates_candles::PopulatesCandlesWithSelf};
@@ -31,6 +32,7 @@ use models::{
     timeseries_builder::TimeSeriesBuilder,
     traits::trading_strategy::TradingStrategy,
 };
+use run_configs::manual_candles::{self};
 use strategy_testing::strategy_tester::StrategyTester;
 use tokio::time::{sleep, Duration};
 use trading_strategies::{
@@ -143,6 +145,10 @@ pub async fn run_always_true_buys() -> Result<()> {
     loop {
         sleep(Duration::from_secs(1)).await;
     }
+}
+
+pub async fn run_manual_candles() -> Result<()> {
+    manual_candles::run().await
 }
 
 pub async fn run_market_buy() -> Result<()> {
