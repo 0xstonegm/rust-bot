@@ -32,7 +32,7 @@ use models::{
     timeseries_builder::TimeSeriesBuilder,
     traits::trading_strategy::TradingStrategy,
 };
-use run_configs::manual_candles::{self};
+use run_configs::{manual_candles, ws_only};
 use strategy_testing::strategy_tester::StrategyTester;
 use tokio::time::{sleep, Duration};
 use trading_strategies::{
@@ -149,6 +149,10 @@ pub async fn run_always_true_buys() -> Result<()> {
 
 pub async fn run_manual_candles() -> Result<()> {
     manual_candles::run().await
+}
+
+pub async fn run_ws_only() -> Result<()> {
+    ws_only::run().await
 }
 
 pub async fn run_market_buy() -> Result<()> {

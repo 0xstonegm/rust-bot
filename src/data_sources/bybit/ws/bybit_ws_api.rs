@@ -1,6 +1,6 @@
 use crate::{
     data_sources::bybit::ws::{
-        incoming_message::{IncomingMessage, KlineResponse},
+        incoming_message::{IncomingMessage, KlineResponse, Kline},
         outgoing_message::{OutgoingMessage, OutgoingMessageArg},
     },
     models::{
@@ -113,12 +113,16 @@ impl BybitWebsocketApi {
         mut ws_stream: WebSocketStream<MaybeTlsStream<TcpStream>>,
         mut rx: Receiver<&'static str>,
     ) -> JoinHandle<()> {
+        // Keep track of previous kline. Used to determine when a new candle
+        // has been formed.
+        let mut prev_kline: Option<Kline> = None;
+
         spawn(async move {
             loop {
                 let ws_msg: Option<Result<Message, Error>> = ws_stream.next().await;
                 select! {
                     _ = Self::handle_ping_message(&mut rx, &mut ws_stream) => {}
-                    _ = Self::handle_websocket_message(&client, ws_msg) => {}
+                    _ = Self::handle_websocket_message(&client, ws_msg, &mut prev_kline) => {}
                 }
             }
         })
@@ -141,9 +145,10 @@ impl BybitWebsocketApi {
     async fn handle_websocket_message(
         client: &Addr<WebsocketClient>,
         ws_msg: Option<Result<Message, Error>>,
+        prev_kline: &mut Option<Kline>
     ) -> Result<(), ()> {
         if let Some(msg) = ws_msg {
-            Self::handle_message(client, msg).await.map_err(|e| {
+            Self::handle_message(client, msg, prev_kline).await.map_err(|e| {
                 eprintln!("Error in Websockets: {:#?}", e);
                 ()
             })
@@ -155,6 +160,7 @@ impl BybitWebsocketApi {
     async fn handle_message(
         client: &Addr<WebsocketClient>,
         msg: Result<Message, tungstenite::Error>,
+        prev_kline: &mut Option<Kline>
     ) -> Result<()> {
         let msg = msg?;
 
@@ -166,7 +172,7 @@ impl BybitWebsocketApi {
                 IncomingMessage::Pong(_) => {}
                 IncomingMessage::Subscribe(sub) => println!("Subscribe: {:#?}", sub),
                 IncomingMessage::Kline(kline_response) => {
-                    Self::handle_kline(kline_response, client).await?
+                    Self::handle_kline(kline_response, client, prev_kline).await?
                 }
             }
         }
@@ -177,11 +183,25 @@ impl BybitWebsocketApi {
     async fn handle_kline(
         kline_response: KlineResponse,
         client: &Addr<WebsocketClient>,
+        prev_kline: &mut Option<Kline>
     ) -> Result<()> {
         let kline = kline_response.get_kline()?;
 
-        if kline.confirm {
-            let candle = kline.to_candle()?;
+        if prev_kline.is_none() {
+            // Only triggers on initial candle on startup
+            *prev_kline = Some(kline.clone());
+        }
+
+        let prev_kline = prev_kline
+            .as_mut()
+            .expect("Expected kline to exist.");
+
+        if kline.start != prev_kline.start {
+            // New candle has started forming, send previous candle which is 
+            // now complete to client. 
+            let candle = prev_kline.to_candle()?;
+            // println!("Candle payload: {:#?}", candle);
+
             let payload = WebsocketPayload {
                 ok: true,
                 message: None,
@@ -189,7 +209,9 @@ impl BybitWebsocketApi {
             };
 
             client.do_send(payload);
-        }
+        }         
+
+        *prev_kline = kline.clone();
 
         Ok(())
     }
