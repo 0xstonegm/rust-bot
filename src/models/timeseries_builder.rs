@@ -53,6 +53,11 @@ impl TimeSeriesBuilder {
 
     pub fn candles(mut self, candles: Vec<Candle>) -> Self {
         self.candles = candles;
+
+        if self.max_length < self.candles.len() {
+            self.max_length = self.candles.len();
+        }
+
         self
     }
 

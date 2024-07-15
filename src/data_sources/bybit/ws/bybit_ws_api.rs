@@ -1,12 +1,13 @@
 use crate::{
     data_sources::bybit::ws::{
-        incoming_message::{IncomingMessage, KlineResponse, Kline},
+        incoming_message::{IncomingMessage, Kline, KlineResponse},
         outgoing_message::{OutgoingMessage, OutgoingMessageArg},
     },
     models::{
         interval::Interval, message_payloads::websocket_payload::WebsocketPayload,
         net_version::NetVersion, websockets::wsclient::WebsocketClient,
     },
+    utils::constants::DEFAULT_SYMBOL,
 };
 use actix::{spawn, Addr};
 use anyhow::{anyhow, Result};
@@ -62,7 +63,7 @@ impl BybitWebsocketApi {
         let args = vec![OutgoingMessageArg {
             stream: "kline".to_string(),
             interval: self.interval_as_string()?,
-            symbol: "BTCUSDT".to_string(),
+            symbol: DEFAULT_SYMBOL.to_string(),
         }];
         let sub = OutgoingMessage::new("subscribe", args);
         let json = sub.to_json();
@@ -135,7 +136,7 @@ impl BybitWebsocketApi {
         if let Some(_) = rx.recv().await {
             Self::send_ping(None, ws_stream).await.map_err(|e| {
                 eprintln!("Error in Websockets: {:#?}", e);
-                ()
+                panic!("Error in send_ping.");
             })
         } else {
             Ok(())
@@ -145,13 +146,15 @@ impl BybitWebsocketApi {
     async fn handle_websocket_message(
         client: &Addr<WebsocketClient>,
         ws_msg: Option<Result<Message, Error>>,
-        prev_kline: &mut Option<Kline>
+        prev_kline: &mut Option<Kline>,
     ) -> Result<(), ()> {
         if let Some(msg) = ws_msg {
-            Self::handle_message(client, msg, prev_kline).await.map_err(|e| {
-                eprintln!("Error in Websockets: {:#?}", e);
-                ()
-            })
+            Self::handle_message(client, msg, prev_kline)
+                .await
+                .map_err(|e| {
+                    eprintln!("Error in Websockets: {:#?}", e);
+                    ()
+                })
         } else {
             Ok(())
         }
@@ -160,7 +163,7 @@ impl BybitWebsocketApi {
     async fn handle_message(
         client: &Addr<WebsocketClient>,
         msg: Result<Message, tungstenite::Error>,
-        prev_kline: &mut Option<Kline>
+        prev_kline: &mut Option<Kline>,
     ) -> Result<()> {
         let msg = msg?;
 
@@ -183,7 +186,7 @@ impl BybitWebsocketApi {
     async fn handle_kline(
         kline_response: KlineResponse,
         client: &Addr<WebsocketClient>,
-        prev_kline: &mut Option<Kline>
+        prev_kline: &mut Option<Kline>,
     ) -> Result<()> {
         let kline = kline_response.get_kline()?;
 
@@ -192,13 +195,11 @@ impl BybitWebsocketApi {
             *prev_kline = Some(kline.clone());
         }
 
-        let prev_kline = prev_kline
-            .as_mut()
-            .expect("Expected kline to exist.");
+        let prev_kline = prev_kline.as_mut().expect("Expected kline to exist.");
 
         if kline.start != prev_kline.start {
-            // New candle has started forming, send previous candle which is 
-            // now complete to client. 
+            // New candle has started forming, send previous candle which is
+            // now complete to client.
             let candle = prev_kline.to_candle()?;
             // println!("Candle payload: {:#?}", candle);
 
@@ -209,7 +210,7 @@ impl BybitWebsocketApi {
             };
 
             client.do_send(payload);
-        }         
+        }
 
         *prev_kline = kline.clone();
 

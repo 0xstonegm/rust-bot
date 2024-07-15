@@ -1,4 +1,3 @@
-use std::time::Duration;
 use crate::{
     data_sources::datasource::DataSource,
     indicators::{
@@ -6,28 +5,24 @@ use crate::{
         is_indicator::IsIndicator, pmar::PMAR, pmarp::PMARP, sma::SMA,
     },
     models::{
-        candle::Candle,
-        database::db::DB,
-        interval::Interval,
-        ma_type::MAType,
-        message_payloads::{
-            ts_subscribe_payload::TSSubscribePayload, websocket_payload::WebsocketPayload,
-        },
-        setups::setup_finder_builder::SetupFinderBuilder,
-        timeseries_builder::TimeSeriesBuilder,
+        candle::Candle, database::db::DB, interval::Interval, ma_type::MAType,
+        message_payloads::websocket_payload::WebsocketPayload,
+        setups::setup_finder_builder::SetupFinderBuilder, timeseries_builder::TimeSeriesBuilder,
         traits::trading_strategy::TradingStrategy,
     },
     trading_strategies::private::kq_14::KQ14,
+    utils::constants::DEFAULT_SYMBOL,
 };
 use actix::Actor;
 use anyhow::Result;
+use std::time::Duration;
 use tokio::time::sleep;
 
 pub async fn run() -> Result<()> {
     let (base_candle, entry_candle) = get_initial_candles();
 
     let mut ts = TimeSeriesBuilder::new()
-        .symbol("BTCUSDT".to_string())
+        .symbol(DEFAULT_SYMBOL.to_string())
         .interval(Interval::Day1)
         .validate_candles_on_add(false)
         .build();
@@ -38,21 +33,14 @@ pub async fn run() -> Result<()> {
     let db = DB::new().await?;
     let db_addr = db.start();
 
-    let sf = SetupFinderBuilder::new()
+    SetupFinderBuilder::new()
         .strategy(Box::new(KQ14::new()))
-        .ts(ts_addr.clone())
+        .ts_addr(ts_addr.clone())
         .source(DataSource::Dummy(1000))
         .db_addr(db_addr)
         .live_trading_enabled(true)
-        .build()?;
-
-    let sf_addr = sf.start();
-
-    let ts_sub_payload = TSSubscribePayload {
-        observer: sf_addr.recipient(),
-    };
-
-    ts_addr.do_send(ts_sub_payload);
+        .build()?
+        .start();
 
     sleep(Duration::new(1, 0)).await;
 

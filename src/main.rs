@@ -6,8 +6,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let filename = env::var("RUSTBOT_ENV").unwrap_or(".env.dev".to_string());
     from_filename(filename).ok();
 
-    rust_bot::run_actual_strategy().await?;
-    // rust_bot::run_always_true_buys().await?;
+    // rust_bot::run_actual_strategy().await?;
+    rust_bot::run_multiple_strategies().await?;
+    // rust_bot::run_true_once_buys().await?;
+    // rust_bot::run_true_always().await?;
     // rust_bot::run_manual_candles().await?;
     // rust_bot::run_ws_only().await?;
 

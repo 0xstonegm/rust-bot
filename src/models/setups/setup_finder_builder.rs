@@ -10,7 +10,7 @@ use anyhow::{Context, Result};
 
 pub struct SetupFinderBuilder {
     strategy: Option<Box<dyn TradingStrategy>>,
-    ts: Option<Addr<TimeSeries>>,
+    ts_addr: Option<Addr<TimeSeries>>,
     source: Option<DataSource>,
     db_addr: Option<Addr<DB>>,
     notifications_enabled: bool,
@@ -23,7 +23,7 @@ impl SetupFinderBuilder {
     pub fn new() -> Self {
         SetupFinderBuilder {
             strategy: None,
-            ts: None,
+            ts_addr: None,
             source: None,
             db_addr: None,
             notifications_enabled: false,
@@ -43,8 +43,8 @@ impl SetupFinderBuilder {
         self
     }
 
-    pub fn ts(mut self, ts: Addr<TimeSeries>) -> Self {
-        self.ts = Some(ts);
+    pub fn ts_addr(mut self, ts_addr: Addr<TimeSeries>) -> Self {
+        self.ts_addr = Some(ts_addr);
         self
     }
 
@@ -79,7 +79,7 @@ impl SetupFinderBuilder {
             .strategy
             .context("Strategy is required to build SetupFinder")?;
         let ts = self
-            .ts
+            .ts_addr
             .context("TimeSeries address is required to build SetupFinder")?;
         let notifications_enabled = self.notifications_enabled;
         let live_trading_enabled = self.live_trading_enabled;

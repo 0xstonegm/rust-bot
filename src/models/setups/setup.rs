@@ -1,6 +1,9 @@
-use crate::models::{
-    candle::Candle, interval::Interval, setups::csv_setup_row::CsvSetupRow,
-    strategy_orientation::StrategyOrientation,
+use crate::{
+    models::{
+        candle::Candle, interval::Interval, setups::csv_setup_row::CsvSetupRow,
+        strategy_orientation::StrategyOrientation,
+    },
+    utils::constants::DEFAULT_SYMBOL,
 };
 use serde::{Deserialize, Serialize};
 
@@ -17,7 +20,7 @@ impl Setup {
     pub fn dummy() -> Setup {
         let candle = Candle::dummy_data(1, "", 100.0).pop().unwrap();
         Setup {
-            symbol: "BTCUSDT".to_string(),
+            symbol: DEFAULT_SYMBOL.to_string(),
             candle,
             interval: Interval::Day1,
             orientation: StrategyOrientation::Long,

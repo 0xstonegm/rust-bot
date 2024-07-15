@@ -14,6 +14,7 @@ use crate::{
         net_version::NetVersion,
         timeseries_builder::TimeSeriesBuilder,
     },
+    utils::constants::DEFAULT_SYMBOL,
 };
 use actix::{
     dev::ContextFutureSpawner, Actor, AsyncContext, Context as ActixContext, Handler, Recipient,
@@ -213,7 +214,10 @@ impl TimeSeries {
             indicator_type.populate_last_candle(self)?;
         }
 
-        println!("Added candle: {:?}", self.candles.last());
+        println!(
+            "TS {} added candle with close {} at {}",
+            self.interval, candle.close, candle.timestamp
+        );
 
         // Notify observers
         let payload = CandleAddedPayload {
@@ -260,7 +264,7 @@ impl TimeSeries {
 
     pub fn dummy() -> Self {
         TimeSeriesBuilder::new()
-            .symbol("BTCUSDT".to_string())
+            .symbol(DEFAULT_SYMBOL.to_string())
             .interval(Interval::Day1)
             .build()
     }

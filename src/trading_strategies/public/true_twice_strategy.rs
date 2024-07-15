@@ -20,11 +20,10 @@ use std::{
     fmt::{Display, Formatter},
 };
 
-/// # One Activation Strategy
+/// # True Twice Strategy
 ///
-/// Dummy strategy used for testing purposes. Always returns that entry
-/// conditions have been reached on first ask, after that always negative.
-/// Same for take-profit and stop-loss.
+/// Dummy strategy used for testing purposes. Returns that entry conditions
+/// have been reached on the second task, after that always negative.
 ///
 /// ## Directionality
 /// - Long
@@ -45,18 +44,19 @@ use std::{
 /// - All
 ///
 #[derive(Debug, Clone)]
-pub struct AlwaysTrueStrategy {
+pub struct TrueTwiceStrategy {
     trading_days: HashSet<Weekday>,
     triggered: bool,
+    triggers: usize,
 }
 
-impl HasMinLength for AlwaysTrueStrategy {
+impl HasMinLength for TrueTwiceStrategy {
     fn min_length(&self) -> usize {
         1
     }
 }
 
-impl TradingStrategy for AlwaysTrueStrategy {
+impl TradingStrategy for TrueTwiceStrategy {
     fn new() -> Self
     where
         Self: Sized,
@@ -64,6 +64,7 @@ impl TradingStrategy for AlwaysTrueStrategy {
         Self {
             trading_days: Self::build_trading_days(),
             triggered: false,
+            triggers: 0,
         }
     }
 
@@ -73,6 +74,11 @@ impl TradingStrategy for AlwaysTrueStrategy {
 
     fn check_last_for_setup(&mut self, candles: &[Candle]) -> Option<SetupBuilder> {
         if self.triggered {
+            return None;
+        }
+
+        if self.triggers < 1 {
+            self.triggers += 1;
             return None;
         }
 
@@ -106,7 +112,7 @@ impl TradingStrategy for AlwaysTrueStrategy {
     }
 }
 
-impl AlwaysTrueStrategy {
+impl TrueTwiceStrategy {
     fn build_trading_days() -> HashSet<Weekday> {
         let mut set = HashSet::new();
 
@@ -122,14 +128,14 @@ impl AlwaysTrueStrategy {
     }
 }
 
-impl RequiresIndicators for AlwaysTrueStrategy {
+impl RequiresIndicators for TrueTwiceStrategy {
     fn required_indicators(&self) -> Vec<IndicatorType> {
         vec![]
     }
 }
 
-impl Display for AlwaysTrueStrategy {
+impl Display for TrueTwiceStrategy {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "AlwaysTrueStrategy")
+        write!(f, "TrueTwiceStrategy")
     }
 }

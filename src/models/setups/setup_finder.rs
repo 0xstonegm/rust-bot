@@ -14,7 +14,7 @@ use crate::{
     },
     notifications::notification_center::NotificationCenter,
 };
-use actix::{fut::wrap_future, Actor, Addr, AsyncContext, Context, Handler};
+use actix::{fut::wrap_future, Actor, Addr, AsyncContext, Context, Handler, Message};
 use anyhow::Result;
 use tokio::try_join;
 
@@ -33,6 +33,14 @@ pub struct SetupFinder {
 
 impl Actor for SetupFinder {
     type Context = Context<Self>;
+
+    fn started(&mut self, ctx: &mut Self::Context) {
+        let payload = TSSubscribePayload {
+            observer: ctx.address().recipient(),
+        };
+
+        self.ts_addr.do_send(payload);
+    }
 }
 
 impl Handler<CandleAddedPayload> for SetupFinder {
@@ -43,16 +51,12 @@ impl Handler<CandleAddedPayload> for SetupFinder {
             return ();
         }
 
-        let payload = RequestLatestCandlesPayload {
-            n: self.strategy.candles_needed_for_setup(),
-        };
-
         let self_addr = ctx.address();
         let ts = self.ts_addr.clone();
         let mut strategy = self.strategy.clone_box();
         let notifications_enabled = self.notifications_enabled;
         let live_trading_enabled = self.live_trading_enabled;
-        let mut spawned_trades = self.spawned_trade_addrs.clone();
+        let spawned_trades = self.spawned_trade_addrs.clone();
         let source = self.source.clone();
         let db_addr = self.db_addr.clone();
 
@@ -60,11 +64,15 @@ impl Handler<CandleAddedPayload> for SetupFinder {
         self.clear_closed_trades();
 
         let fut = async move {
+            let payload = RequestLatestCandlesPayload {
+                n: strategy.candles_needed_for_setup(),
+            };
+
             let candle_response = ts
                 .send(payload)
                 .await
-                .unwrap_or_else(|e| panic!("Failed to send payload: {:#?}", e))
-                .unwrap_or_else(|e| panic!("Failed to unwrap LatestCandleResponse: {:#?}", e));
+                .expect("Failed to request latest candles")
+                .expect("Failed to unwrap LatestCandleResponse");
 
             let sb = strategy.check_last_for_setup(&candle_response.candles);
 
@@ -89,13 +97,17 @@ impl Handler<CandleAddedPayload> for SetupFinder {
 
             self_addr.do_send(TriggeredPayload);
 
-            println!("Setup found: {:#?}", setup);
+            println!(
+                "{} {} setup found at {} on close {}",
+                setup.orientation, setup.symbol, setup.candle.timestamp, setup.candle.close
+            );
+
+            if spawned_trades.len() > 0 {
+                println!("Trade already spawned, ignoring notification and trade creation.");
+                return;
+            }
 
             if live_trading_enabled {
-                if spawned_trades.len() > 0 {
-                    return;
-                }
-
                 let wallet_fut = source.get_wallet();
                 let last_price_fut = source.get_symbol_price(&setup.symbol);
 
@@ -129,10 +141,10 @@ impl Handler<CandleAddedPayload> for SetupFinder {
                 let ts_subscribe_payload = TSSubscribePayload {
                     observer: trade_addr.clone().recipient(),
                 };
-
                 ts.do_send(ts_subscribe_payload);
 
-                spawned_trades.push(trade_addr)
+                let msg = TradeSpawnedMsg { addr: trade_addr };
+                self_addr.do_send(msg);
             }
 
             if notifications_enabled {
@@ -148,6 +160,20 @@ impl Handler<CandleAddedPayload> for SetupFinder {
 
         let actor_fut = wrap_future::<_, Self>(fut);
         ctx.wait(actor_fut);
+    }
+}
+
+#[derive(Message)]
+#[rtype(result = "()")]
+struct TradeSpawnedMsg {
+    addr: Addr<Trade>,
+}
+
+impl Handler<TradeSpawnedMsg> for SetupFinder {
+    type Result = ();
+
+    fn handle(&mut self, msg: TradeSpawnedMsg, _ctx: &mut Self::Context) -> Self::Result {
+        self.spawned_trade_addrs.push(msg.addr);
     }
 }
 

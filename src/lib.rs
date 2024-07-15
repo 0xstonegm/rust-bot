@@ -32,16 +32,21 @@ use models::{
     timeseries_builder::TimeSeriesBuilder,
     traits::trading_strategy::TradingStrategy,
 };
-use run_configs::{manual_candles, ws_only};
+use run_configs::{always_true, manual_candles, multiple_strategies, ws_only};
 use strategy_testing::strategy_tester::StrategyTester;
 use tokio::time::{sleep, Duration};
 use trading_strategies::{
     private::kq_14::KQ14,
-    public::{always_true_strategy::AlwaysTrueStrategy, rsi_basic::RsiBasic},
+    public::{rsi_basic::RsiBasic, true_once_strategy::TrueOnceStrategy},
 };
+use utils::constants::DEFAULT_SYMBOL;
 
 pub async fn run_dummy() -> Result<()> {
     todo!()
+}
+
+pub async fn run_multiple_strategies() -> Result<()> {
+    multiple_strategies::run().await
 }
 
 pub async fn run_actual_strategy() -> Result<()> {
@@ -54,7 +59,7 @@ pub async fn run_actual_strategy() -> Result<()> {
 
     // Initialize timeseries and indicators
     let mut ts = source
-        .get_historical_data("BTCUSDT", &interval, strategy.min_length() + 300, &net)
+        .get_historical_data(DEFAULT_SYMBOL, &interval, strategy.min_length() + 300, &net)
         .await?;
 
     for indicator_type in strategy.required_indicators() {
@@ -70,19 +75,14 @@ pub async fn run_actual_strategy() -> Result<()> {
     // Create setup finder
     let setup_finder = SetupFinderBuilder::new()
         .strategy(strategy)
-        .ts(ts_addr.clone())
+        .ts_addr(ts_addr.clone())
         .db_addr(db_addr.clone())
         .notifications_enabled(true)
         .live_trading_enabled(true)
         .source(source.clone())
         .build()?;
 
-    // Subscribe SetupFinder to TimeSeries
-    let sf_addr = setup_finder.start();
-    let payload = TSSubscribePayload {
-        observer: sf_addr.recipient(),
-    };
-    ts_addr.do_send(payload);
+    setup_finder.start();
 
     // Start websocket client
     let mut wsclient = WebsocketClient::new(source, interval, net);
@@ -95,56 +95,12 @@ pub async fn run_actual_strategy() -> Result<()> {
     }
 }
 
-pub async fn run_always_true_buys() -> Result<()> {
-    let strategy: Box<dyn TradingStrategy> = Box::new(AlwaysTrueStrategy::new());
-    let interval = Interval::Minute1;
-    // let source = DataSource::Bybit;
-    let source = DataSource::Dummy(4000);
-    let net = NetVersion::Mainnet;
+pub async fn run_true_once_buys() -> Result<()> {
+    always_true::true_once().await
+}
 
-    // Initialize timeseries and indicators
-    let mut ts = source
-        .get_historical_data("BTCUSDT", &interval, strategy.min_length() + 300, &net)
-        .await?;
-    ts.validate_candles_on_add = false;
-
-    for indicator_type in strategy.required_indicators() {
-        ts.add_indicator(indicator_type)?;
-    }
-
-    let ts_addr = ts.start();
-
-    // Set up DB
-    let db = DB::new().await?;
-    let db_addr = db.start();
-
-    // Create setup finder and subscribe to timeseries
-    let setup_finder = SetupFinderBuilder::new()
-        .strategy(strategy)
-        .ts(ts_addr.clone())
-        .notifications_enabled(false)
-        .live_trading_enabled(true)
-        .source(source.clone())
-        .only_trigger_once(true)
-        .db_addr(db_addr)
-        .build()?;
-
-    let sf_addr = setup_finder.start();
-
-    let payload = TSSubscribePayload {
-        observer: sf_addr.recipient(),
-    };
-
-    ts_addr.do_send(payload);
-
-    // Start websocket client
-    let mut wsclient = WebsocketClient::new(source, interval, net);
-    wsclient.add_observer(ts_addr);
-    wsclient.start();
-
-    loop {
-        sleep(Duration::from_secs(1)).await;
-    }
+pub async fn run_true_always() -> Result<()> {
+    always_true::true_always().await
 }
 
 pub async fn run_manual_candles() -> Result<()> {
@@ -168,7 +124,7 @@ pub async fn run_market_buy() -> Result<()> {
 
     if buy {
         let balance: f64 = wallet.total_available_balance;
-        let symbol = "BTCUSDT";
+        let symbol = DEFAULT_SYMBOL;
         BybitRestApi::market_buy(symbol, balance * 0.5).await?;
     } else {
         BybitRestApi::market_sell_all(&wallet).await?;
@@ -200,7 +156,7 @@ pub async fn run_single_indicator() -> Result<()> {
     let net = NetVersion::Mainnet;
     let needed_candles = k_len + k_smoothing + d_smoothing - 2;
     let mut ts = source
-        .get_historical_data("BTCUSDT", &interval, needed_candles + 500, &net)
+        .get_historical_data(DEFAULT_SYMBOL, &interval, needed_candles + 500, &net)
         .await?;
 
     indicator_type.populate_candles(&mut ts)?;
@@ -219,14 +175,14 @@ pub async fn run_single_indicator() -> Result<()> {
 }
 
 pub async fn run_strategy() -> Result<()> {
-    let strategy: Box<dyn TradingStrategy> = Box::new(AlwaysTrueStrategy::new());
+    let strategy: Box<dyn TradingStrategy> = Box::new(TrueOnceStrategy::new());
     let interval = Interval::Minute1;
     let source = DataSource::Bybit;
     let net = NetVersion::Mainnet;
 
     // Initialize timeseries and indicators
     let mut ts = source
-        .get_historical_data("BTCUSDT", &interval, strategy.min_length() + 300, &net)
+        .get_historical_data(DEFAULT_SYMBOL, &interval, strategy.min_length() + 300, &net)
         .await?;
 
     // ts.save_to_local(&source).await?;
@@ -241,19 +197,12 @@ pub async fn run_strategy() -> Result<()> {
     // Create setup finder and subscribe to timeseries
     let setup_finder = SetupFinderBuilder::new()
         .strategy(strategy)
-        .ts(ts_addr.clone())
+        .ts_addr(ts_addr.clone())
         .notifications_enabled(true)
         .live_trading_enabled(false)
         .source(source.clone())
         .build()?;
-
-    let sf_addr = setup_finder.start();
-
-    let payload = TSSubscribePayload {
-        observer: sf_addr.recipient(),
-    };
-
-    ts_addr.do_send(payload);
+    setup_finder.start();
 
     // Start websocket client
     let mut wsclient = WebsocketClient::new(source, interval, net);
@@ -284,7 +233,12 @@ pub async fn run_double_strategies() -> Result<()> {
 
     // Initialize timeseries and indicators
     let mut ts = source
-        .get_historical_data("BTCUSDT", &interval, long_strategy.min_length() + 300, &net)
+        .get_historical_data(
+            DEFAULT_SYMBOL,
+            &interval,
+            long_strategy.min_length() + 300,
+            &net,
+        )
         .await?;
     // ts.save_to_local(&source).await?;
     // let ts = source.load_local_data(symbol, &interval).await?;
@@ -298,12 +252,12 @@ pub async fn run_double_strategies() -> Result<()> {
     // Create setup finder and subscribe to timeseries
     let long_setup_finder = SetupFinderBuilder::new()
         .strategy(long_strategy)
-        .ts(ts_addr.clone())
+        .ts_addr(ts_addr.clone())
         .notifications_enabled(true)
         .build()?;
     let short_setup_finder = SetupFinderBuilder::new()
         .strategy(short_strategy)
-        .ts(ts_addr.clone())
+        .ts_addr(ts_addr.clone())
         .notifications_enabled(true)
         .build()?;
 
@@ -339,7 +293,7 @@ pub async fn run_historical() -> Result<()> {
     let interval = Interval::Day1;
     let net = NetVersion::Mainnet;
     let mut ts = source
-        .get_historical_data("BTCUSDT", &interval, 19, &net)
+        .get_historical_data(DEFAULT_SYMBOL, &interval, 19, &net)
         .await?;
 
     RSI::populate_candles(&mut ts)?;
@@ -363,18 +317,12 @@ pub async fn run_setup_finder() -> Result<()> {
     let ts = TimeSeries::dummy();
     let ts = ts.start();
 
-    let sf = SetupFinderBuilder::new()
+    SetupFinderBuilder::new()
         .strategy(strategy)
-        .ts(ts.clone())
+        .ts_addr(ts.clone())
         .notifications_enabled(true)
-        .build()?;
-
-    let sf = sf.start();
-
-    let payload = TSSubscribePayload {
-        observer: sf.recipient(),
-    };
-    ts.do_send(payload);
+        .build()?
+        .start();
 
     let mut i = 0.0;
     loop {
@@ -394,7 +342,7 @@ pub async fn run_setup_finder() -> Result<()> {
 
 pub async fn run_manual_setups() -> Result<()> {
     let mut ts = TimeSeriesBuilder::new()
-        .symbol("BTCUSDT".to_string())
+        .symbol(DEFAULT_SYMBOL.to_string())
         .interval(Interval::Day1)
         .build();
     RSI::populate_candles(&mut ts)?;
@@ -402,17 +350,12 @@ pub async fn run_manual_setups() -> Result<()> {
     let strategy: Box<dyn TradingStrategy> = Box::new(RsiBasic::new());
     let ts = ts.start();
 
-    let sf = SetupFinderBuilder::new()
+    SetupFinderBuilder::new()
         .strategy(strategy)
-        .ts(ts.clone())
+        .ts_addr(ts.clone())
         .notifications_enabled(true)
-        .build()?;
-    let sf = sf.start();
-
-    let payload = TSSubscribePayload {
-        observer: sf.recipient(),
-    };
-    ts.do_send(payload);
+        .build()?
+        .start();
 
     let mut candles = Candle::dummy_data(20, "positive", 100.0);
     candles.extend(Candle::dummy_data(15, "negative", 300.0));
@@ -441,7 +384,7 @@ pub async fn run_strategy_tester() -> Result<()> {
 
     println!("Fetching Timeseries data.");
     let mut ts = source
-        .get_historical_data("BTCUSDT", &interval, 20000, &net)
+        .get_historical_data(DEFAULT_SYMBOL, &interval, 20000, &net)
         .await?;
 
     // Calculate indicators for TimeSeries

@@ -1,8 +1,11 @@
-use std::time::Duration;
+use crate::{
+    data_sources::datasource::DataSource,
+    models::{net_version::NetVersion, websockets::wsclient::WebsocketClient},
+};
 use actix::Actor;
 use anyhow::Result;
+use std::time::Duration;
 use tokio::time::sleep;
-use crate::{data_sources::datasource::DataSource, models::{net_version::NetVersion, websockets::wsclient::WebsocketClient}};
 
 pub async fn run() -> Result<()> {
     let source = DataSource::Bybit;

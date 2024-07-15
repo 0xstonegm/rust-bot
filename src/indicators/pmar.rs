@@ -191,7 +191,11 @@ impl PMAR {
                 // so this shortcut is taken. Revisit at some later point to
                 // rewrite the entire indicator system.
                 let candle = segment.last()?;
-                let ema = candle.indicators.get(&IndicatorType::EMA(len))?.as_ema()?;
+                let ema = candle
+                    .indicators
+                    .get(&IndicatorType::EMA(len))
+                    .expect("Unable to find EMA indicator when calculating PMAR.")
+                    .as_ema()?;
                 candle.close / ema.value
             }
             MAType::VWMA => {
